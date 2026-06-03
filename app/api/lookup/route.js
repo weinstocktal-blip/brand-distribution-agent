@@ -51,7 +51,7 @@ export async function POST(request) {
         "anthropic-beta": "web-search-2025-03-05",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         max_tokens: 16000,
         system: SYSTEM_PROMPT,
         messages: [{ role: "user", content: userMessage }],
@@ -66,13 +66,12 @@ export async function POST(request) {
       return Response.json({ error: errMsg }, { status: response.status });
     }
 
-    // Extract text blocks
     const textBlocks = (data.content || []).filter((b) => b.type === "text");
     const rawText = textBlocks.map((b) => b.text).join("\n").trim();
 
     if (!rawText) {
       return Response.json(
-        { error: "Agent returned no text response. It may not have found any results." },
+        { error: "Agent returned no text response." },
         { status: 500 }
       );
     }
