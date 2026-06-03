@@ -11,18 +11,46 @@ const SYSTEM_PROMPT = `You are a fashion brand research agent. Given a brand nam
   "sources": "<brief note on where you found this info>"
 }
 
+Return ONLY valid JSON. No markdown backticks. No text before or after the JSON object.
+
 Rules:
-- Search the brand's website (especially About, Stockists, Press pages) and fashion press.
+- Search the brand website (especially About, Stockists, Press pages) and fashion press.
 - For us_distribution:
   - "None" = not sold in the US at all
-  - "DTC Only" = only their own website, no physical retail
-  - "DTC + Own Store(s)" = own website plus own physical store(s)
+  - "DTC Only" = only through their own website, no physical retail
+  - "DTC + Own Store(s)" = own website plus their own physical store(s)
   - "Limited Wholesale" = 1-5 US retail doors
   - "Broad Wholesale" = 6+ US retail doors or major department stores
-- For us_retail_partners: list actual names. Don't guess. Leave empty if unsure.
-- For intl_distribution: specific countries/retailers if found.
+- For us_retail_partners: list actual names only. Do not guess. Leave empty if unsure.
+- For intl_distribution: specific countries or retailers if found.
 - confidence: High = clear data from brand site or reliable press. Medium = indirect. Low = inference.
-- Return ONLY the JSON object. No markdown. No explanation.`;
+- IMPORTANT: Return ONLY the JSON object. Nothing else.`;
+
+function extractJSON(text) {
+  const cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {}
+
+  let depth = 0;
+  let start = -1;
+  for (let i = 0; i < cleaned.length; i++) {
+    if (cleaned[i] === "{") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (cleaned[i] === "}") {
+      depth--;
+      if (depth === 0 && start !== -1) {
+        try {
+          return JSON.parse(cleaned.substring(start, i + 1));
+        } catch {}
+      }
+    }
+  }
+
+  return null;
+}
 
 export async function POST(request) {
   try {
@@ -76,21 +104,13 @@ export async function POST(request) {
       );
     }
 
-    const cleaned = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+    const parsed = extractJSON(rawText);
 
-    let parsed;
-    try {
-      parsed = JSON.parse(cleaned);
-    } catch {
-      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        parsed = JSON.parse(jsonMatch[0]);
-      } else {
-        return Response.json(
-          { error: "Could not parse agent response", raw: cleaned },
-          { status: 500 }
-        );
-      }
+    if (!parsed) {
+      return Response.json(
+        { error: "Could not parse agent response", raw: rawText.substring(0, 500) },
+        { status: 500 }
+      );
     }
 
     return Response.json({ success: true, brand: brandName, ...parsed });
