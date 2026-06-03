@@ -48,29 +48,35 @@ export async function POST(request) {
         "Content-Type": "application/json",
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
+        "anthropic-beta": "web-search-2025-03-05",
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
+        max_tokens: 16000,
         system: SYSTEM_PROMPT,
         messages: [{ role: "user", content: userMessage }],
         tools: [{ type: "web_search_20250305", name: "web_search" }],
       }),
     });
 
-    if (!response.ok) {
-      const errData = await response.json();
-      return Response.json(
-        { error: errData.error?.message || "API request failed" },
-        { status: response.status }
-      );
-    }
-
     const data = await response.json();
+
+    if (!response.ok) {
+      const errMsg = data.error?.message || JSON.stringify(data.error) || "API request failed";
+      return Response.json({ error: errMsg }, { status: response.status });
+    }
 
     // Extract text blocks
     const textBlocks = (data.content || []).filter((b) => b.type === "text");
     const rawText = textBlocks.map((b) => b.text).join("\n").trim();
+
+    if (!rawText) {
+      return Response.json(
+        { error: "Agent returned no text response. It may not have found any results." },
+        { status: 500 }
+      );
+    }
+
     const cleaned = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
 
     let parsed;
